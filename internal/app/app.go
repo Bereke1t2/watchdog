@@ -11,6 +11,7 @@ import (
 	"watchdog.onebusaway.org/internal/config"
 	"watchdog.onebusaway.org/internal/geo"
 	"watchdog.onebusaway.org/internal/gtfs"
+	"watchdog.onebusaway.org/internal/history"
 	"watchdog.onebusaway.org/internal/metrics"
 	"watchdog.onebusaway.org/internal/models"
 	"watchdog.onebusaway.org/internal/utils"
@@ -34,8 +35,11 @@ type Application struct {
 	// database was unreachable at startup: PostgreSQL is optional, and every
 	// user must treat nil as "investigation storage disabled".
 	InvestigationDB *pgxpool.Pool
-	Logger          *slog.Logger
-	Version         string
+	// HistoryService records observations in InvestigationDB. It is always
+	// set, and does nothing when InvestigationDB is nil.
+	HistoryService *history.HistoryService
+	Logger         *slog.Logger
+	Version        string
 	// collectMu serializes collection cycles so a new tick never overlaps
 	// unfinished work from the previous tick. collectOnce takes it with
 	// TryLock and skips the tick when it is already held.
@@ -108,6 +112,7 @@ func New(cfg *config.Config, logger *slog.Logger, client *http.Client, version s
 		// refresh after start-up from re-downloading every bundle.
 		KnownServers:    NewKnownServerSet(cfg.GetServers()),
 		InvestigationDB: investigationDB,
+		HistoryService:  history.NewHistoryService(investigationDB, logger, version),
 		Logger:          logger,
 		Version:         version,
 	}
